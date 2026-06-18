@@ -1,0 +1,452 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ciudad entre ríos, montaña y biodiversidad — Cali</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --black:  #2a2318;
+      --white:  #fefcf8;
+      --bg:     #f2f4ee;
+      --border: #d6dbc9;
+      --muted:  #8a9178;
+      --subtle: #e8ede0;
+      --green:  #5a7a4a;
+      --green-pale: #dde8d4;
+      --brown:  #7a5c3a;
+      --brown-pale: #ede0d0;
+      --sage:   #c8d5b9;
+      --header-bg: #2e3d28;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--black);
+    }
+
+    body { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+    .header {
+      flex-shrink: 0; background: var(--header-bg); color: var(--white);
+      padding: 14px 24px; display: flex; align-items: center;
+      justify-content: space-between; gap: 16px;
+    }
+    .header-eyebrow { font-size: 10px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.5; margin-bottom: 3px; }
+    .header-title { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+    .header-meta { display: flex; gap: 20px; flex-shrink: 0; }
+    .meta-chip { display: flex; flex-direction: column; align-items: flex-end; }
+    .meta-chip-label { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.45; }
+    .meta-chip-value { font-size: 13px; font-weight: 600; }
+
+    .main { display: flex; flex: 1; overflow: hidden; }
+
+    .sidebar {
+      width: 260px; flex-shrink: 0; background: var(--white);
+      border-right: 1px solid var(--border); display: flex;
+      flex-direction: column; overflow: hidden;
+    }
+    .sidebar-header { background: var(--subtle); }
+    .sidebar-header { padding: 16px 18px 12px; border-bottom: 1px solid var(--border); }
+    .label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin-bottom: 10px; }
+    .hint-line { font-size: 11px; color: var(--muted); line-height: 1.5; }
+    .hint-line strong { color: var(--black); font-weight: 600; }
+
+    .loc-list { flex: 1; overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; }
+    .loc-item {
+      display: flex; align-items: center; gap: 10px; padding: 9px 10px;
+      border-radius: 7px; cursor: pointer; border: 1.5px solid transparent;
+      transition: background 0.12s, border-color 0.12s; user-select: none;
+    }
+    .loc-item:hover { background: var(--bg); }
+    .loc-item.state-origin { background: var(--green); border-color: var(--green); color: var(--white); }
+    .loc-item.state-dest { background: var(--brown-pale); border-color: var(--brown); }
+    .loc-badge {
+      width: 26px; height: 26px; border-radius: 50%; background: var(--green); color: var(--white);
+      font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .loc-item.state-origin .loc-badge { background: var(--white); color: var(--green); }
+    .loc-item.state-dest   .loc-badge { background: var(--brown); color: var(--white); }
+    .loc-text { flex: 1; min-width: 0; }
+    .loc-name { font-size: 12px; font-weight: 600; line-height: 1.25; }
+    .loc-tags { font-size: 10px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .loc-item.state-origin .loc-tags { color: rgba(255,255,255,0.6); }
+    .loc-item.state-dest .loc-tags { color: var(--brown); }
+
+    #map { flex: 1; }
+
+    /* ROUTE CARD */
+    .route-card {
+      position: absolute; bottom: 28px; left: 50%; transform: translateX(-50%);
+      z-index: 1000; background: var(--white); border: 1px solid var(--border);
+      border-radius: 12px; box-shadow: 0 6px 28px rgba(0,0,0,0.14);
+      width: 500px; max-width: calc(100% - 40px);
+      display: none; flex-direction: column; overflow: hidden;
+    }
+    .route-card.visible { display: flex; }
+
+    .route-card-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 13px 16px 10px; border-bottom: 1px solid var(--border); gap: 10px;
+    }
+    .route-card-path { display: flex; align-items: center; gap: 7px; flex: 1; min-width: 0; }
+    .rcp-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+    .rcp-arrow { flex-shrink: 0; color: var(--muted); }
+    .rcp-dist { flex-shrink: 0; background: var(--green); color: var(--white); font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 4px; }
+    .btn-close-card {
+      flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
+      border: 1.5px solid var(--border); background: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--muted); transition: border-color 0.12s, color 0.12s; font-family: inherit;
+    }
+    .btn-close-card:hover { border-color: var(--black); color: var(--black); }
+
+    .route-card-times { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid var(--border); background: var(--subtle); }
+    .time-cell { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 11px 8px; border-right: 1px solid var(--border); }
+    .time-cell:last-child { border-right: none; }
+    .time-icon { color: var(--green); }
+    .time-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+    .time-value { font-size: 11px; font-weight: 600; color: var(--black); text-align: center; line-height: 1.3; }
+
+    .route-card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px; background: var(--bg); }
+    .btn-detail {
+      display: flex; align-items: flex-start; gap: 8px; padding: 12px 14px;
+      border: none; border-radius: 9px; font-family: inherit; font-size: 12px;
+      font-weight: 700; cursor: pointer; transition: filter 0.15s, transform 0.1s;
+      text-align: left; width: 100%;
+    }
+    .btn-detail:first-child { background: var(--green-pale); color: var(--green); border: 1.5px solid var(--sage); }
+    .btn-detail:last-child  { background: var(--brown-pale); color: var(--brown); border: 1.5px solid #c9b49a; }
+    .btn-detail:hover { filter: brightness(0.95); transform: translateY(-1px); }
+    .btn-detail:active { transform: translateY(0); }
+    .btn-detail-num {
+      width: 22px; height: 22px; border-radius: 50%; font-size: 11px; margin-top: 1px;
+      font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .btn-detail:first-child .btn-detail-num { background: var(--green); color: var(--white); }
+    .btn-detail:last-child  .btn-detail-num { background: var(--brown); color: var(--white); }
+    .btn-detail-text { flex: 1; min-width: 0; white-space: normal; word-break: break-word; line-height: 1.4; }
+    .btn-detail-arrow { flex-shrink: 0; opacity: 0.55; margin-top: 3px; }
+    @media (max-width: 480px) {
+      .route-card-actions { grid-template-columns: 1fr; }
+    }
+
+    /* MODAL */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(20,20,20,0.55); z-index: 2000;
+      display: none; align-items: center; justify-content: center;
+      padding: 24px; backdrop-filter: blur(2px);
+    }
+    .modal-overlay.visible { display: flex; }
+    .modal-card {
+      background: var(--white); border-radius: 14px;
+      box-shadow: 0 12px 48px rgba(0,0,0,0.22); width: 440px;
+      max-width: 100%; max-height: calc(100vh - 48px);
+      overflow: hidden; display: flex; flex-direction: column;
+      animation: modalIn 0.18s ease;
+    }
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(0.96) translateY(8px); }
+      to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    .modal-img { width: 100%; height: 220px; object-fit: cover; display: block; flex-shrink: 0; }
+    .modal-body { padding: 20px 22px 24px; overflow-y: auto; position: relative; }
+    .modal-close {
+      position: absolute; top: 14px; right: 14px; width: 30px; height: 30px;
+      border-radius: 50%; border: 1.5px solid var(--border); background: var(--white);
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      color: var(--muted); transition: border-color 0.12s, color 0.12s; font-family: inherit; z-index: 1;
+    }
+    .modal-close:hover { border-color: var(--black); color: var(--black); }
+    .modal-name { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; padding-right: 40px; margin-bottom: 5px; }
+    .modal-tags { font-size: 11px; color: var(--muted); margin-bottom: 14px; }
+    .modal-desc { font-size: 13px; color: #444; line-height: 1.65; }
+
+    /* Leaflet overrides */
+    .leaflet-control-zoom { border: 1px solid var(--border) !important; box-shadow: 0 1px 6px rgba(0,0,0,0.1) !important; }
+    .leaflet-control-zoom a { color: var(--black) !important; border-bottom: 1px solid var(--border) !important; font-family: 'Inter',system-ui,sans-serif !important; font-weight: 500 !important; }
+    .leaflet-control-zoom a:hover { background: var(--bg) !important; }
+    .leaflet-control-attribution { font-family: 'Inter',system-ui,sans-serif !important; font-size: 9px !important; color: var(--muted) !important; }
+    .map-tooltip { background: var(--header-bg) !important; color: var(--white) !important; border: none !important; border-radius: 4px !important; font-family: 'Inter',system-ui,sans-serif !important; font-size: 11.5px !important; font-weight: 500 !important; padding: 5px 9px !important; box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important; }
+    .map-tooltip::before { border-top-color: var(--header-bg) !important; }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <div>
+    <div class="header-eyebrow">Cali Ciudad Diversa &mdash; Ruta 1</div>
+    <div class="header-title">Ciudad entre ríos, montaña y biodiversidad</div>
+  </div>
+  <div class="header-meta">
+    <div class="meta-chip"><span class="meta-chip-label">Lugares</span><span class="meta-chip-value">4</span></div>
+    <div class="meta-chip"><span class="meta-chip-label">Duración</span><span class="meta-chip-value">4–6 h</span></div>
+    <div class="meta-chip"><span class="meta-chip-label">Dificultad</span><span class="meta-chip-value">Media</span></div>
+  </div>
+</header>
+
+<div class="main">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="label">Lugares en la ruta</div>
+      <p class="hint-line" id="hintText">Selecciona un <strong>origen</strong> y un <strong>destino</strong> en el mapa.</p>
+    </div>
+    <div class="loc-list" id="locList"></div>
+  </aside>
+
+  <div style="flex:1; position:relative; overflow:hidden;">
+    <div id="map" style="width:100%; height:100%;"></div>
+
+    <!-- ROUTE CARD -->
+    <div class="route-card" id="routeCard">
+      <div class="route-card-head">
+        <div class="route-card-path">
+          <span class="rcp-name" id="rcpNameA"></span>
+          <span class="rcp-arrow">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="2" y1="7" x2="12" y2="7"/><polyline points="8,3 12,7 8,11"/>
+            </svg>
+          </span>
+          <span class="rcp-name" id="rcpNameB"></span>
+        </div>
+        <span class="rcp-dist" id="rcpDist"></span>
+        <button class="btn-close-card" onclick="clearSelection()" title="Limpiar selección">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="1" y1="1" x2="9" y2="9"/><line x1="9" y1="1" x2="1" y2="9"/>
+          </svg>
+        </button>
+      </div>
+      <div class="route-card-times" id="routeCardTimes"></div>
+      <div class="route-card-actions">
+        <button class="btn-detail" id="btnDetailA" onclick="openDetail(0)">
+          <span class="btn-detail-num" id="btnDetailNumA"></span>
+          <span class="btn-detail-text" id="btnDetailTextA"></span>
+          <span class="btn-detail-arrow"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="6" x2="10" y2="6"/><polyline points="7,3 10,6 7,9"/></svg></span>
+        </button>
+        <button class="btn-detail" id="btnDetailB" onclick="openDetail(1)">
+          <span class="btn-detail-num" id="btnDetailNumB"></span>
+          <span class="btn-detail-text" id="btnDetailTextB"></span>
+          <span class="btn-detail-arrow"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="6" x2="10" y2="6"/><polyline points="7,3 10,6 7,9"/></svg></span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="modal-overlay" id="modalOverlay" onclick="handleOverlayClick(event)">
+  <div class="modal-card">
+    <img class="modal-img" id="modalImg" src="" alt="" />
+    <div class="modal-body">
+      <button class="modal-close" onclick="closeDetail()" title="Cerrar">
+        <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="1" y1="1" x2="10" y2="10"/><line x1="10" y1="1" x2="1" y2="10"/>
+        </svg>
+      </button>
+      <div class="modal-name" id="modalName"></div>
+      <div class="modal-tags" id="modalTags"></div>
+      <div class="modal-desc" id="modalDesc"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+const LOCATIONS = [
+  { id:0, name:'Ecoparque de la Biodiversidad', tags:'Naturaleza · Avistamiento · Atletismo', desc:'Ubicado en el sector de Pance, al sur de Cali, es un espacio natural de conservación de fauna y flora andina. Ideal para avistamiento de aves, atletismo y conexión con el ecosistema del río Pance.', coords:[3.3390,-76.5530], img:'Imagenes/Ecoparque de la biodiversidad.png' },
+  { id:1, name:'Zoológico de Cali', tags:'Educación ambiental · Naturaleza', desc:'Uno de los zoológicos más importantes de Colombia, reconocido por la diversidad de especies y por sus programas de educación ambiental y conservación de fauna silvestre.', coords:[3.4311,-76.5340], img:'Imagenes/zoo.jpg' },
+  { id:2, name:'Jardín Botánico de Cali', tags:'Educación ambiental · Naturaleza · Avistamiento', desc:'El Jardín Botánico Juan María Céspedes alberga una gran variedad de flora tropical y andina. Es un refugio de biodiversidad en el corazón de la ciudad, ideal para el avistamiento de aves.', coords:[3.4476,-76.5412], img:'Imagenes/Jardin botanico.jpg' },
+  { id:3, name:'Cristo Rey', tags:'Naturaleza · Mirador · Artesanías', desc:'Este emblemático sitio es uno de los lugares más representativos de Cali. Su ubicación estratégica permite tener vistas panorámicas de la ciudad. Considerado patrimonio cultural de la región.', coords:[3.4393,-76.5617], img:'Imagenes/cristorro.jpg' }
+];
+
+const ROUTES = {
+  '0-1':{ dist:'11.5 km', moto:'25–35 min', carro:'30–45 min', pie:'2 h 30 – 3 h', bus:'50–75 min' },
+  '0-2':{ dist:'11.9 km', moto:'25–40 min', carro:'30–50 min', pie:'2 h 40 – 3 h 15', bus:'55–80 min' },
+  '0-3':{ dist:'10.6 km', moto:'30–45 min', carro:'35–55 min', pie:'2 h 45 – 3 h 30', bus:'60–90 min' },
+  '1-2':{ dist:'1.6 km', moto:'5–10 min', carro:'7–12 min', pie:'20–30 min', bus:'15–30 min' },
+  '1-3':{ dist:'1.0 km', moto:'15–25 min', carro:'20–35 min', pie:'1 h 15 – 2 h', bus:'40–70 min' },
+  '2-3':{ dist:'2.3 km', moto:'15–25 min', carro:'20–35 min', pie:'1 h – 1 h 45', bus:'40–70 min' }
+};
+
+const TRANSPORT = [
+  { key:'moto', label:'Moto', icon:`<svg class="time-icon" width="20" height="14" viewBox="0 0 24 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="4.5" cy="12" r="3.5"/><circle cx="19.5" cy="12" r="3.5"/><path d="M8 12h5l2-6h3.5l1 6"/><path d="M8 12L7 7H4L2 10"/></svg>` },
+  { key:'carro', label:'Carro', icon:`<svg class="time-icon" width="20" height="14" viewBox="0 0 24 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="5" width="22" height="8" rx="2"/><path d="M4 5L6 1h12l2 4"/><circle cx="6" cy="13" r="2.5"/><circle cx="18" cy="13" r="2.5"/><line x1="10" y1="5" x2="10" y2="13"/></svg>` },
+  { key:'pie', label:'A pie', icon:`<svg class="time-icon" width="14" height="20" viewBox="0 0 16 22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="2.5" r="1.5"/><path d="M6 6l3 5 4 2"/><path d="M9 11l-2 5"/><path d="M7 16l-3 4"/><path d="M9 16l3 4"/><path d="M4 8l5-2"/></svg>` },
+  { key:'bus', label:'Bus / MIO', icon:`<svg class="time-icon" width="20" height="16" viewBox="0 0 24 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="1" width="22" height="13" rx="2"/><line x1="1" y1="8" x2="23" y2="8"/><line x1="8" y1="1" x2="8" y2="8"/><line x1="16" y1="1" x2="16" y2="8"/><circle cx="6" cy="16.5" r="2"/><circle cx="18" cy="16.5" r="2"/><line x1="8" y1="14" x2="16" y2="14"/></svg>` }
+];
+
+let selected = [], leafletMarkers = [], allLines = [], activeLines = [];
+
+const map = L.map('map', { center:[3.4000,-76.5450], zoom:12 });
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+  attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  subdomains:'abcd', maxZoom:20
+}).addTo(map);
+
+function makeIcon(idx, state) {
+  const num = idx + 1;
+  let bg, ring, shadow;
+  if (state === 'origin')     { bg='#5a7a4a'; ring='0 0 0 3px #fff, 0 0 0 5.5px #5a7a4a'; shadow='0 3px 10px rgba(0,0,0,0.28)'; }
+  else if (state === 'dest')  { bg='#7a5c3a'; ring='0 0 0 2.5px #fff, 0 0 0 4.5px #7a5c3a'; shadow='0 2px 8px rgba(0,0,0,0.22)'; }
+  else                        { bg='#2e3d28'; ring='none'; shadow='0 2px 8px rgba(0,0,0,0.22)'; }
+  return L.divIcon({
+    className:'',
+    html:`<div style="width:34px;height:34px;background:${bg};border:2.5px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;font-family:'Inter',system-ui,sans-serif;box-shadow:${ring},${shadow};cursor:pointer;">${num}</div>`,
+    iconSize:[34,34], iconAnchor:[17,17]
+  });
+}
+
+function drawAllLines() {
+  allLines.forEach(l => map.removeLayer(l)); allLines = [];
+  for (let i = 0; i < LOCATIONS.length; i++)
+    for (let j = i+1; j < LOCATIONS.length; j++)
+      allLines.push(L.polyline([LOCATIONS[i].coords, LOCATIONS[j].coords], { color:'#ccccca', weight:1.5, opacity:0.6, dashArray:'5 5' }).addTo(map));
+}
+
+function clearActiveLines() { activeLines.forEach(l => map.removeLayer(l)); activeLines = []; }
+
+function drawActiveLine(id1, id2) {
+  clearActiveLines();
+  activeLines.push(L.polyline([LOCATIONS[id1].coords, LOCATIONS[id2].coords], { color:'#5a7a4a', weight:2.5, opacity:1, dashArray:'9 6' }).addTo(map));
+}
+
+function showRouteCard(id1, id2) {
+  const key = `${Math.min(id1,id2)}-${Math.max(id1,id2)}`;
+  const r = ROUTES[key], a = LOCATIONS[id1], b = LOCATIONS[id2];
+  document.getElementById('rcpNameA').textContent = a.name;
+  document.getElementById('rcpNameB').textContent = b.name;
+  document.getElementById('rcpDist').textContent  = r.dist;
+  document.getElementById('routeCardTimes').innerHTML = TRANSPORT.map(t => `
+    <div class="time-cell">${t.icon}<span class="time-label">${t.label}</span><span class="time-value">${r[t.key]}</span></div>`).join('');
+  document.getElementById('btnDetailNumA').textContent  = id1 + 1;
+  document.getElementById('btnDetailTextA').textContent = 'Ver detalles de ' + a.name;
+  document.getElementById('btnDetailNumB').textContent  = id2 + 1;
+  document.getElementById('btnDetailTextB').textContent = 'Ver detalles de ' + b.name;
+  document.getElementById('btnDetailA').dataset.locId = id1;
+  document.getElementById('btnDetailB').dataset.locId = id2;
+  document.getElementById('routeCard').classList.add('visible');
+}
+
+function hideRouteCard() { document.getElementById('routeCard').classList.remove('visible'); }
+
+function openDetailById(id) {
+  const loc = LOCATIONS[id];
+  document.getElementById('modalImg').src  = loc.img;
+  document.getElementById('modalImg').alt  = loc.name;
+  document.getElementById('modalName').textContent = loc.name;
+  document.getElementById('modalTags').textContent = loc.tags;
+  document.getElementById('modalDesc').textContent = loc.desc;
+  document.getElementById('modalOverlay').classList.add('visible');
+}
+
+function openDetail(btnIndex) {
+  const btn = btnIndex === 0 ? document.getElementById('btnDetailA') : document.getElementById('btnDetailB');
+  openDetailById(parseInt(btn.dataset.locId));
+}
+
+function closeDetail() { document.getElementById('modalOverlay').classList.remove('visible'); }
+function handleOverlayClick(e) { if (e.target === document.getElementById('modalOverlay')) closeDetail(); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetail(); });
+
+function updateMarkerIcons() {
+  leafletMarkers.forEach((m,i) => {
+    let state = 'default';
+    if (selected[0]===i) state='origin'; else if (selected[1]===i) state='dest';
+    m.setIcon(makeIcon(i, state));
+  });
+}
+
+function updateListItems() {
+  document.querySelectorAll('.loc-item').forEach((el,i) => {
+    el.classList.remove('state-origin','state-dest');
+    if (selected[0]===i) el.classList.add('state-origin');
+    else if (selected[1]===i) el.classList.add('state-dest');
+  });
+}
+
+function clearSelection() {
+  selected = []; updateMarkerIcons(); updateListItems(); clearActiveLines(); hideRouteCard();
+  document.getElementById('hintText').innerHTML = 'Selecciona un <strong>origen</strong> y un <strong>destino</strong> en el mapa.';
+}
+
+function handleClick(id) {
+  if (selected.length === 2) {
+    clearSelection(); selected = [id]; updateMarkerIcons(); updateListItems();
+    document.getElementById('hintText').innerHTML = `<strong>${LOCATIONS[id].name}</strong> seleccionado. Elige el destino.`;
+    return;
+  }
+  if (selected.includes(id)) return;
+  selected.push(id); updateMarkerIcons(); updateListItems();
+  if (selected.length === 1) {
+    document.getElementById('hintText').innerHTML = `<strong>${LOCATIONS[id].name}</strong> seleccionado. Elige el destino.`;
+  }
+  if (selected.length === 2) {
+    drawActiveLine(selected[0], selected[1]);
+    showRouteCard(selected[0], selected[1]);
+    map.fitBounds(L.latLngBounds([LOCATIONS[selected[0]].coords, LOCATIONS[selected[1]].coords]), { padding:[100,100], maxZoom:14 });
+    document.getElementById('hintText').innerHTML = 'Selecciona un <strong>origen</strong> y un <strong>destino</strong> en el mapa.';
+  }
+}
+
+const locList = document.getElementById('locList');
+LOCATIONS.forEach((loc, i) => {
+  const item = document.createElement('div');
+  item.className = 'loc-item';
+  item.innerHTML = `<div class="loc-badge">${i+1}</div><div class="loc-text"><div class="loc-name">${loc.name}</div><div class="loc-tags">${loc.tags}</div></div>`;
+  item.addEventListener('click', () => handleClick(i));
+  item.addEventListener('dblclick', e => { e.stopPropagation(); openDetailById(i); });
+  locList.appendChild(item);
+});
+
+LOCATIONS.forEach((loc, i) => {
+  const marker = L.marker(loc.coords, { icon: makeIcon(i,'default') }).addTo(map);
+  marker.bindTooltip(loc.name, { permanent:false, direction:'top', offset:[0,-8], className:'map-tooltip' });
+  marker.on('click', e => { L.DomEvent.stopPropagation(e); handleClick(i); });
+  marker.on('dblclick', e => { L.DomEvent.stopPropagation(e); openDetailById(i); });
+  leafletMarkers.push(marker);
+});
+
+drawAllLines();
+
+// Minimum enclosing circle around all locations
+(function drawBoundingCircle() {
+  const lats = LOCATIONS.map(l => l.coords[0]);
+  const lngs = LOCATIONS.map(l => l.coords[1]);
+  const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+  const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+  const center = L.latLng(centerLat, centerLng);
+  let maxDist = 0;
+  LOCATIONS.forEach(l => {
+    const d = center.distanceTo(L.latLng(l.coords[0], l.coords[1]));
+    if (d > maxDist) maxDist = d;
+  });
+  L.circle(center, {
+    radius: maxDist * 1.35,
+    color: '#2c7bb6',
+    weight: 2,
+    dashArray: '10 7',
+    opacity: 0.7,
+    fillColor: '#2c7bb6',
+    fillOpacity: 0.05,
+    interactive: false
+  }).addTo(map);
+})();
+
+// Lock minimum zoom so the bounding circle always stays fully visible
+(function setMinZoom() {
+  const allBounds = L.latLngBounds(LOCATIONS.map(l => l.coords));
+  const padded = allBounds.pad(0.45);
+  const minZ = map.getBoundsZoom(padded);
+  map.setMinZoom(Math.max(1, Math.floor(minZ)));
+})();
+</script>
+</body>
+</html>
